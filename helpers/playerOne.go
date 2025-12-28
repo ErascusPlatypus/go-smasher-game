@@ -26,19 +26,33 @@ type Player struct {
 	facingRight bool
 }
 
-
-var spritePath = "assets/idle_fig.png"
-var walkPath = "assets/walk_*.png"
+var fistIdlePath = "assets/idle_fig.png"
+var swordIdlePath = "assets/sword_idle.png"
+var pistolIdlePath = "assets/pistol_idle.png"
+var pistolWalkPath = "assets/pistol_run_*.png"
+var swordWalkPath = "assets/sword_run_*.png"
+var fistWalkPath = "assets/walk_*.png"
 
 const PlayerScale = 0.75
 
-func NewPlayer() *Player {
-	sprite := LoadImage(spritePath)
-	walkSprites := LoadImages(walkPath)
+func NewPlayer(choice string) *Player {
+	var sprite *ebiten.Image
+	var walkSprites [] *ebiten.Image
+
+	if choice == "Sword" {
+		sprite = LoadImage(swordIdlePath)
+		walkSprites = LoadImages(swordWalkPath)
+	} else if choice == "Pistol" {
+		sprite = LoadImage(pistolIdlePath)
+		walkSprites = LoadImages(pistolWalkPath)
+	} else {
+		sprite = LoadImage(fistIdlePath)
+		walkSprites = LoadImages(fistWalkPath)
+	}
 
 	w := float64(sprite.Bounds().Dx()) * PlayerScale
 	h := float64(sprite.Bounds().Dy()) * PlayerScale
-	
+
 	return &Player{
 		X: 100,
 		Y: 0,
@@ -52,7 +66,7 @@ func NewPlayer() *Player {
 	}
 }
 
-func (p *Player) Update(platforms [] Platform) {
+func (p *Player) Update(platforms [] Platform, choice string) {
 	if ebiten.IsKeyPressed(ebiten.KeySpace) && p.onGround{
 		p.VelY = JumpVelocity
 		p.onGround = false 

@@ -39,7 +39,7 @@ func LoadImage(path string) *ebiten.Image {
 }
 
 func LoadImages(path string) [] *ebiten.Image {
-	files, err := filepath.Glob("assets/walk_*.png")
+	files, err := filepath.Glob(path)
 
 	if err != nil {
 		log.Fatal(err)

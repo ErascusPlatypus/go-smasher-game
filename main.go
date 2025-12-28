@@ -45,6 +45,7 @@ func (g *Game) updateChoice() {
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
 		g.choice = choices[g.choiceIndex]
+	    g.player = helpers.NewPlayer(g.choice) 
 		g.state = StatePlaying
 	}
 }
@@ -54,7 +55,7 @@ func (g *Game) Update() error {
 	case StateChoice:
 		g.updateChoice()
 	case StatePlaying:
-		g.player.Update(g.platforms)
+    	g.player.Update(g.platforms, g.choice)	
 	}
 	return nil
 }
@@ -136,7 +137,6 @@ func main() {
 	helpers.Init(assets)
 
 	g := &Game{
-		player: helpers.NewPlayer(),
 		state: StateChoice,
 	}
 
