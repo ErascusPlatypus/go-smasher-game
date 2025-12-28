@@ -5,16 +5,16 @@ import (
 	"image/color"
 	"pro12_fighter/helpers"
 
-	"github.com/hajimehoshi/ebiten/v2/text"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-
+	"github.com/hajimehoshi/ebiten/v2/text"
 )
 
 //go:embed assets/**
 var assets embed.FS
 
-type GameState int 
+type GameState int
+
 var choices = []string{"Fist", "Sword", "Pistol"}
 
 const (
@@ -24,9 +24,10 @@ const (
 
 type Game struct {
 	player    *helpers.Player
-	state GameState
-	choice string
+	state     GameState
+	choice    string
 	platforms []helpers.Platform
+	bullets   []*helpers.Bullet
 
 	choiceIndex int
 }
@@ -45,7 +46,7 @@ func (g *Game) updateChoice() {
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
 		g.choice = choices[g.choiceIndex]
-	    g.player = helpers.NewPlayer(g.choice) 
+		g.player = helpers.NewPlayer(g.choice)
 		g.state = StatePlaying
 	}
 }
@@ -55,7 +56,17 @@ func (g *Game) Update() error {
 	case StateChoice:
 		g.updateChoice()
 	case StatePlaying:
-    	g.player.Update(g.platforms, g.choice)	
+		g.player.Update(g.platforms, g.choice, &g.bullets)
+
+		activeBullets := []*helpers.Bullet{}
+		for _, b := range g.bullets {
+			b.Update()
+			if b.Active {
+				activeBullets = append(activeBullets, b)
+			}
+		}
+
+		g.bullets = activeBullets
 	}
 	return nil
 }
@@ -65,7 +76,7 @@ func (g *Game) Layout(w, h int) (int, int) {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	screen.Fill(color.White)
+	screen.Fill(color.RGBA{R: 255, G: 255, B: 0, A: 255})
 
 	if g.state == StateChoice {
 		g.loadChoiceScreen(screen)
@@ -76,10 +87,14 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		helpers.DrawPlatform(screen, p)
 	}
 
-	drawHitbox(screen, g.player.X, g.player.Y, g.player.Width, g.player.Height)
+	drawHitbox(screen, g.player)
 	g.player.Draw(screen)
-}
 
+	for _, b := range g.bullets {
+		b.Draw(screen)
+	}
+
+}
 
 func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
 	startY := 220
@@ -122,22 +137,27 @@ func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
 	}
 }
 
-
-func drawHitbox(screen *ebiten.Image, x, y, w, h float64) {
-	img := ebiten.NewImage(int(w), int(h))
-	img.Fill(color.RGBA{255, 0, 0, 100})
+func drawHitbox(screen *ebiten.Image, p *helpers.Player) {
+	img := ebiten.NewImage(int(p.Width), int(p.Height))
+	img.Fill(color.RGBA{255, 0, 0, 120})
 
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(x, y)
+	op.GeoM.Translate(
+		p.X - p.Width/2,
+		p.Y,
+	)
+
 	screen.DrawImage(img, op)
 }
+
 
 
 func main() {
 	helpers.Init(assets)
 
 	g := &Game{
-		state: StateChoice,
+		state:   StateChoice,
+		bullets: []*helpers.Bullet{},
 	}
 
 	g.platforms = []helpers.Platform{
