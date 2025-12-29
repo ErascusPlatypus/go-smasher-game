@@ -27,7 +27,7 @@ func main() {
 	g.Platforms = []helpers.Platform{
 		{X: 0, Y: 700, Width: 1200, Height: 10},
 
-		{X: 150, Y: 550, Width: 140, Height: 10},
+		{X: 200, Y: 550, Width: 140, Height: 10},
 		{X: 500, Y: 400, Width: 150, Height: 10},
 		{X: 850, Y: 550, Width: 140, Height: 10},
 	}

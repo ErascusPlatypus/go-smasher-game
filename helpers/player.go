@@ -30,26 +30,33 @@ type Player struct {
 	idleSprite           *ebiten.Image
 	walkSprites          []*ebiten.Image
 	attackSprites        []*ebiten.Image
+	damageSprites        []*ebiten.Image
 	walkPos              int
 	walkTimer, walkDelay int
 	facingRight          bool
 	attackPos            int
+	damagePos            int
 	attacking            bool
 	Health               int
 	hitThisSwing         bool
+	takingDamage         bool
+	hasHit 				 bool 
+
 
 	controls Controls
 
-	shootTimer *Timer
+	shootTimer  *Timer
+	damageTimer *Timer
 }
 
-var fistIdlePath = "assets/idle_fig.png"
-var swordIdlePath = "assets/sword_idle.png"
 var pistolIdlePath = "assets/pistol_idle.png"
 var pistolWalkPath = "assets/pistol_run_*.png"
+var pistolDamagePath = "assets/pistol_hit_*.png"
+
+var swordIdlePath = "assets/sword_idle.png"
 var swordWalkPath = "assets/sword_run_*.png"
-var fistWalkPath = "assets/walk_*.png"
 var swordAttackPath = "assets/sword_combo_*.png"
+var swordDamagePath = "assets/sword_hit_*.png"
 
 const PlayerScale = 0.75
 
@@ -57,22 +64,22 @@ func NewPlayer(choice string, c Controls) *Player {
 	var idleSprite *ebiten.Image
 	var walkSprites []*ebiten.Image
 	var attackSprites []*ebiten.Image
+	var damageSprites []*ebiten.Image
+
 	var health int
 
 	if choice == "Sword" {
 		idleSprite = LoadImage(swordIdlePath)
 		walkSprites = LoadImages(swordWalkPath)
 		attackSprites = LoadImages(swordAttackPath)
+		damageSprites = LoadImages(swordDamagePath)
 		health = 150
 	} else if choice == "Pistol" {
 		idleSprite = LoadImage(pistolIdlePath)
 		walkSprites = LoadImages(pistolWalkPath)
 		attackSprites = walkSprites
+		damageSprites = LoadImages(pistolDamagePath)
 		health = 100
-	} else {
-		idleSprite = LoadImage(fistIdlePath)
-		walkSprites = LoadImages(fistWalkPath)
-		attackSprites = walkSprites
 	}
 
 	w := float64(idleSprite.Bounds().Dx()) * PlayerScale
@@ -92,13 +99,17 @@ func NewPlayer(choice string, c Controls) *Player {
 		idleSprite:    idleSprite,
 		walkSprites:   walkSprites,
 		attackSprites: attackSprites,
+		damageSprites: damageSprites,
 		Health:        health,
 		choice:        choice,
 		attackPos:     0,
+		damagePos:     0,
+		hasHit: false,
 		walkPos:       0,
 		walkDelay:     8,
 		facingRight:   true,
 		shootTimer:    timer,
+		damageTimer:   NewTimer(120 * time.Millisecond),
 		controls:      c,
 	}
 }
@@ -106,13 +117,15 @@ func NewPlayer(choice string, c Controls) *Player {
 func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet) {
 	if p.attacking {
 		p.sprite = p.attackSprites[p.attackPos]
+	} else if p.takingDamage {
+		p.sprite = p.damageSprites[p.damagePos]
 	} else if p.VelX != 0 {
 		p.sprite = p.walkSprites[p.walkPos]
 	} else {
 		p.sprite = p.idleSprite
 	}
 
-	if ebiten.IsKeyPressed(p.controls.Attack) {
+	if !p.takingDamage && ebiten.IsKeyPressed(p.controls.Attack) {
 		if p.choice == "Pistol" {
 			if !p.shootTimer.IsActive() {
 				p.shootTimer.Start()
@@ -139,6 +152,18 @@ func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet) {
 		}
 	}
 
+	if p.takingDamage && p.damageTimer.IsReady() {
+		p.damagePos++
+
+		if p.damagePos >= len(p.damageSprites) {
+			p.damagePos = 0
+			p.takingDamage = false
+			p.damageTimer.Stop()
+		} else {
+			p.damageTimer.Reset()
+		}
+	}
+
 	if p.attacking && p.shootTimer.IsReady() {
 		p.attackPos++
 
@@ -152,12 +177,12 @@ func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet) {
 		}
 	}
 
-	if ebiten.IsKeyPressed(p.controls.Jump) && p.onGround {
+	if ebiten.IsKeyPressed(p.controls.Jump) && p.onGround && !p.takingDamage {
 		p.VelY = JumpVelocity
 		p.onGround = false
 	}
 
-	if !p.attacking && ebiten.IsKeyPressed(p.controls.Right) {
+	if !p.attacking && ebiten.IsKeyPressed(p.controls.Right) && !p.takingDamage {
 		p.VelX = VelX
 		p.walkTimer++
 
@@ -171,7 +196,7 @@ func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet) {
 		p.sprite = p.walkSprites[p.walkPos]
 	}
 
-	if !p.attacking && ebiten.IsKeyPressed(p.controls.Left) {
+	if !p.attacking && ebiten.IsKeyPressed(p.controls.Left) && !p.takingDamage {
 		p.VelX = -VelX
 		p.walkTimer++
 
@@ -274,11 +299,21 @@ func (p *Player) Draw(screen *ebiten.Image, playerOne bool) {
 }
 
 func (p *Player) TakeDamage(d int) {
+	if p.takingDamage {
+		return 
+	}
+
+	p.takingDamage = true
+	p.damagePos = 0        
+	p.damageTimer.Reset()
+	p.damageTimer.Start()
+
 	p.Health -= d
 	if p.Health < 0 {
 		p.Health = 0
 	}
 }
+
 
 func (p *Player) GetSwordHitbox() (Rect, bool) {
 	if p.choice != "Sword" || !p.attacking {

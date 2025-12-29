@@ -10,7 +10,7 @@ import (
 
 type GameState int
 
-var choices = []string{"Fist", "Sword", "Pistol"}
+var choices = []string{"Sword", "Pistol"}
 
 var PlayerOneControls = Controls{
 	Left:   ebiten.KeyA,
@@ -49,7 +49,7 @@ type Game struct {
 	choiceIndexTwo int
 }
 
-func (g *Game) updateChoice() {
+func (g *Game) updateChoice(choiceOne, choiceTwo bool) {
 	if inpututil.IsKeyJustPressed(ebiten.KeyDown) {
 		g.choiceIndexTwo = (g.choiceIndexTwo + 1) % len(choices)
 	}
@@ -93,7 +93,14 @@ func (g *Game) updateChoice() {
 func (g *Game) Update() error {
 	switch g.State {
 	case StateChoice:
-		g.updateChoice()
+		var choiceOne, choiceTwo bool 
+		if ebiten.IsKeyPressed(ebiten.KeyEnter) {
+			choiceOne = true
+		}
+		if ebiten.IsKeyPressed(ebiten.KeyShift) {
+			choiceTwo = true 
+		}
+		g.updateChoice(choiceOne, choiceTwo)
 	case StatePlaying:
 		g.playerOne.Update(g.Platforms, &g.BulletsOne)
 		g.playerTwo.Update(g.Platforms, &g.BulletsTwo)
@@ -202,6 +209,16 @@ func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
 	op.GeoM.Translate(620, 180)
 	screen.DrawImage(rightPanel, op)
 
+	r := 0
+	b := 40 
+	if g.choiceOne != "" {
+		r = 255
+	}
+
+	if g.choiceTwo != "" {
+		b = 255
+	}
+
 	text.Draw(
 		screen,
 		"PLAYER 1",
@@ -244,7 +261,7 @@ func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
 
 		if i == g.choiceIndexOne {
 			bg := ebiten.NewImage(300, lineHeight)
-			bg.Fill(color.RGBA{0, 80, 200, 220})
+			bg.Fill(color.RGBA{uint8(r), 80, 200, 220})
 
 			op := &ebiten.DrawImageOptions{}
 			op.GeoM.Translate(140, float64(y-28))
@@ -271,7 +288,7 @@ func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
 
 		if i == g.choiceIndexTwo {
 			bg := ebiten.NewImage(300, lineHeight)
-			bg.Fill(color.RGBA{200, 40, 40, 220})
+			bg.Fill(color.RGBA{200, 40, uint8(b), 220})
 
 			op := &ebiten.DrawImageOptions{}
 			op.GeoM.Translate(680, float64(y-28))

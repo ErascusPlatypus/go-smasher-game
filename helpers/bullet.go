@@ -18,7 +18,7 @@ const (
 	bulletSpeed = 10.0
 )
 
-var bulletSprite = "assets/bullet.png"
+var bulletSprite = "assets/bulletO.png"
 
 func NewBullet(x, y float64, dir bool) *Bullet {
 	sprite := LoadImage(bulletSprite)
@@ -51,7 +51,9 @@ func (b *Bullet) Draw(screen *ebiten.Image, playerOne bool) {
 	opts := &ebiten.DrawImageOptions{}
 	w, h := b.sprite.Bounds().Dx(), b.sprite.Bounds().Dy()
 	opts.GeoM.Translate(-float64(w)/2, -float64(h)/2)
-	opts.GeoM.Rotate(math.Pi / 2)
+	if !playerOne {
+		opts.GeoM.Rotate(math.Pi)
+	}
 
 	opts.GeoM.Translate(
 		b.X+float64(w)/2,
