@@ -51,38 +51,38 @@ type Game struct {
 
 func (g *Game) updateChoice() {
 	if inpututil.IsKeyJustPressed(ebiten.KeyDown) {
-		g.choiceIndexOne = (g.choiceIndexOne + 1) % len(choices)
+		g.choiceIndexTwo = (g.choiceIndexTwo + 1) % len(choices)
 	}
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyUp) {
-		g.choiceIndexOne--
-		if g.choiceIndexOne < 0 {
-			g.choiceIndexOne = len(choices) - 1
-		}
-	}
-
-	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-		g.choiceOne = choices[g.choiceIndexOne]
-		g.playerOne = NewPlayer(g.choiceOne, PlayerOneControls)
-		g.StatePlayerOne = StatePlaying
-	}
-
-	if inpututil.IsKeyJustPressed(ebiten.KeyW) {
 		g.choiceIndexTwo--
 		if g.choiceIndexTwo < 0 {
 			g.choiceIndexTwo = len(choices) - 1
 		}
 	}
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
-		g.choiceIndexTwo = (g.choiceIndexTwo + 1) % len(choices)
-	}
-
-	if inpututil.IsKeyJustPressed(ebiten.KeyShiftLeft) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
 		g.choiceTwo = choices[g.choiceIndexTwo]
 		g.playerTwo = NewPlayer(g.choiceTwo, PlayerTwoControls)
 		g.playerTwo.X = 900
 		g.StatePlayerTwo = StatePlaying
+	}
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyW) {
+		g.choiceIndexOne--
+		if g.choiceIndexOne < 0 {
+			g.choiceIndexOne = len(choices) - 1
+		}
+	}
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
+		g.choiceIndexOne = (g.choiceIndexOne + 1) % len(choices)
+	}
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyShiftLeft) {
+		g.choiceOne = choices[g.choiceIndexOne]
+		g.playerOne = NewPlayer(g.choiceOne, PlayerOneControls)
+		g.StatePlayerOne = StatePlaying
 	}
 
 	if g.StatePlayerOne == StatePlaying && g.StatePlayerTwo == StatePlaying {
@@ -186,28 +186,68 @@ func (g *Game) Draw(screen *ebiten.Image) {
 }
 
 func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
-	startYOne := 220
 	lineHeight := 42
-	y := 0
+
+	leftPanel := ebiten.NewImage(500, 420)
+	// leftPanel.Fill(color.RGBA{200, 220, 255, 255})
+
+	rightPanel := ebiten.NewImage(500, 420)
+	// rightPanel.Fill(color.RGBA{255, 210, 210, 255})
+
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(80, 180)
+	screen.DrawImage(leftPanel, op)
+
+	op = &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(620, 180)
+	screen.DrawImage(rightPanel, op)
 
 	text.Draw(
 		screen,
-		"Choose Your Weapon - Player 1",
+		"PLAYER 1",
 		DefaultFont,
-		460,
+		240,
+		220,
+		color.RGBA{0, 60, 150, 255},
+	)
+
+	text.Draw(
+		screen,
+		"PLAYER 2",
+		DefaultFont,
+		780,
+		220,
+		color.RGBA{150, 0, 0, 255},
+	)
+
+	text.Draw(
+		screen,
+		"W / S  Move   SPACE  Select",
+		DefaultFont,
 		160,
+		260,
 		color.Black,
 	)
 
+	text.Draw(
+		screen,
+		"↑ / ↓  Move   SHIFT  Select",
+		DefaultFont,
+		700,
+		260,
+		color.Black,
+	)
+
+	startY := 310
 	for i, c := range choices {
-		y = startYOne + i*lineHeight
+		y := startY + i*lineHeight
 
 		if i == g.choiceIndexOne {
-			bg := ebiten.NewImage(260, lineHeight)
-			bg.Fill(color.RGBA{30, 30, 30, 220})
+			bg := ebiten.NewImage(300, lineHeight)
+			bg.Fill(color.RGBA{0, 80, 200, 220})
 
 			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Translate(450, float64(y-28))
+			op.GeoM.Translate(140, float64(y-28))
 			screen.DrawImage(bg, op)
 		}
 
@@ -220,32 +260,21 @@ func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
 			screen,
 			c,
 			DefaultFont,
-			480,
+			170,
 			y,
 			col,
 		)
 	}
 
-	startYTwo := y + lineHeight*2
-
-	text.Draw(
-		screen,
-		"Choose Your Weapon - Player 2",
-		DefaultFont,
-		460,
-		160,
-		color.Black,
-	)
-
 	for i, c := range choices {
-		y = startYTwo + i*lineHeight
+		y := startY + i*lineHeight
 
 		if i == g.choiceIndexTwo {
-			bg := ebiten.NewImage(260, lineHeight)
-			bg.Fill(color.RGBA{30, 30, 30, 220})
+			bg := ebiten.NewImage(300, lineHeight)
+			bg.Fill(color.RGBA{200, 40, 40, 220})
 
 			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Translate(450, float64(y-28))
+			op.GeoM.Translate(680, float64(y-28))
 			screen.DrawImage(bg, op)
 		}
 
@@ -258,7 +287,7 @@ func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
 			screen,
 			c,
 			DefaultFont,
-			480,
+			710,
 			y,
 			col,
 		)
