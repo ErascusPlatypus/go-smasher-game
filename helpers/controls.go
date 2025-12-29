@@ -8,5 +8,6 @@ type Controls struct {
 	Jump ebiten.Key
 	Attack ebiten.Key
 	Down ebiten.Key
+	SpecialOne ebiten.Key
 }
 

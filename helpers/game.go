@@ -13,19 +13,21 @@ type GameState int
 var choices = []string{"Sword", "Pistol"}
 
 var PlayerOneControls = Controls{
-	Left:   ebiten.KeyA,
-	Right:  ebiten.KeyD,
-	Jump:   ebiten.KeyW,
-	Down:   ebiten.KeyS,
-	Attack: ebiten.KeySpace,
+	Left:       ebiten.KeyA,
+	Right:      ebiten.KeyD,
+	Jump:       ebiten.KeyW,
+	Down:       ebiten.KeyS,
+	Attack:     ebiten.KeySpace,
+	SpecialOne: ebiten.KeyR,
 }
 
 var PlayerTwoControls = Controls{
-	Left:   ebiten.KeyLeft,
-	Right:  ebiten.KeyRight,
-	Jump:   ebiten.KeyUp,
-	Down:   ebiten.KeyDown,
-	Attack: ebiten.KeyEnter,
+	Left:       ebiten.KeyLeft,
+	Right:      ebiten.KeyRight,
+	Jump:       ebiten.KeyUp,
+	Down:       ebiten.KeyDown,
+	Attack:     ebiten.KeyEnter,
+	SpecialOne: ebiten.KeyShiftRight,
 }
 
 const (
@@ -44,6 +46,8 @@ type Game struct {
 	Platforms      []Platform
 	BulletsOne     []*Bullet
 	BulletsTwo     []*Bullet
+	BombsOne       []*Bomb
+	BombsTwo       []*Bomb
 
 	choiceIndexOne int
 	choiceIndexTwo int
@@ -93,17 +97,17 @@ func (g *Game) updateChoice(choiceOne, choiceTwo bool) {
 func (g *Game) Update() error {
 	switch g.State {
 	case StateChoice:
-		var choiceOne, choiceTwo bool 
+		var choiceOne, choiceTwo bool
 		if ebiten.IsKeyPressed(ebiten.KeyEnter) {
 			choiceOne = true
 		}
 		if ebiten.IsKeyPressed(ebiten.KeyShift) {
-			choiceTwo = true 
+			choiceTwo = true
 		}
 		g.updateChoice(choiceOne, choiceTwo)
 	case StatePlaying:
-		g.playerOne.Update(g.Platforms, &g.BulletsOne)
-		g.playerTwo.Update(g.Platforms, &g.BulletsTwo)
+		g.playerOne.Update(g.Platforms, &g.BulletsOne, &g.BombsOne)
+		g.playerTwo.Update(g.Platforms, &g.BulletsTwo, &g.BombsTwo)
 
 		if box, ok := g.playerOne.GetSwordHitbox(); ok {
 			if box.Intersects(g.playerTwo.GetRect()) && !g.playerOne.hitThisSwing {
@@ -118,6 +122,73 @@ func (g *Game) Update() error {
 				g.playerTwo.hitThisSwing = true
 			}
 		}
+
+		activeBombs := []*Bomb{}
+
+		for _, b := range g.BombsOne {
+
+			if !b.Exploded && b.HitsPlayer(g.playerTwo) {
+				b.Exploded = true
+				b.Active = false
+				b.ExplosionTTL = 20
+			}
+
+			if b.Active {
+				b.Update()
+			}
+
+			if b.Exploded {
+				if !b.HasDamaged && b.HitsPlayer(g.playerTwo) {
+					g.playerTwo.TakeDamage(35)
+					b.HasDamaged = true
+				}
+
+				b.ExplosionTTL--
+				if b.ExplosionTTL > 0 {
+					activeBombs = append(activeBombs, b)
+				}
+				continue
+			}
+
+			if b.Active {
+				activeBombs = append(activeBombs, b)
+			}
+		}
+
+		g.BombsOne = activeBombs
+
+		activeBombs = []*Bomb{}
+
+		for _, b := range g.BombsTwo {
+			if !b.Exploded && b.HitsPlayer(g.playerOne) {
+				b.Exploded = true
+				b.Active = false
+				b.ExplosionTTL = 20
+			}
+
+			if b.Active {
+				b.Update()
+			}
+
+			if b.Exploded {
+				if !b.HasDamaged && b.HitsPlayer(g.playerOne) {
+					g.playerOne.TakeDamage(35)
+					b.HasDamaged = true
+				}
+
+				b.ExplosionTTL--
+				if b.ExplosionTTL > 0 {
+					activeBombs = append(activeBombs, b)
+				}
+				continue
+			}
+
+			if b.Active {
+				activeBombs = append(activeBombs, b)
+			}
+		}
+
+		g.BombsTwo = activeBombs
 
 		activeBullets := []*Bullet{}
 		for _, b := range g.BulletsOne {
@@ -190,6 +261,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		b.Draw(screen, false)
 	}
 
+	for _, b := range g.BombsOne {
+		b.Draw(screen)
+	}
+	for _, b := range g.BombsTwo {
+		b.Draw(screen)
+	}
+
 }
 
 func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
@@ -210,7 +288,7 @@ func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
 	screen.DrawImage(rightPanel, op)
 
 	r := 0
-	b := 40 
+	b := 40
 	if g.choiceOne != "" {
 		r = 255
 	}

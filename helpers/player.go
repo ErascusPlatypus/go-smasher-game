@@ -40,13 +40,13 @@ type Player struct {
 	Health               int
 	hitThisSwing         bool
 	takingDamage         bool
-	hasHit 				 bool 
-
+	hasHit               bool
 
 	controls Controls
 
-	shootTimer  *Timer
-	damageTimer *Timer
+	shootTimer   *Timer
+	damageTimer  *Timer
+	bombCooldown *Timer
 }
 
 var pistolIdlePath = "assets/pistol_idle.png"
@@ -104,17 +104,18 @@ func NewPlayer(choice string, c Controls) *Player {
 		choice:        choice,
 		attackPos:     0,
 		damagePos:     0,
-		hasHit: false,
+		hasHit:        false,
 		walkPos:       0,
 		walkDelay:     8,
 		facingRight:   true,
 		shootTimer:    timer,
 		damageTimer:   NewTimer(120 * time.Millisecond),
+		bombCooldown:  NewTimer(10 * time.Second),
 		controls:      c,
 	}
 }
 
-func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet) {
+func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet, bombList *[]*Bomb) {
 	if p.attacking {
 		p.sprite = p.attackSprites[p.attackPos]
 	} else if p.takingDamage {
@@ -123,6 +124,27 @@ func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet) {
 		p.sprite = p.walkSprites[p.walkPos]
 	} else {
 		p.sprite = p.idleSprite
+	}
+
+	if p.bombCooldown.IsActive() && p.bombCooldown.IsReady() {
+		p.bombCooldown.Stop()
+	}
+
+	if p.choice == "Pistol" &&
+		inpututil.IsKeyJustPressed(p.controls.SpecialOne) &&
+		!p.bombCooldown.IsActive() {
+
+		bx := p.X
+		if p.facingRight {
+			bx += p.Width / 2
+		} else {
+			bx -= p.Width / 2
+		}
+
+		by := p.Y + p.Height*0.4
+
+		*bombList = append(*bombList, NewBomb(bx, by, p.facingRight))
+		p.bombCooldown.Start()
 	}
 
 	if !p.takingDamage && ebiten.IsKeyPressed(p.controls.Attack) {
@@ -300,11 +322,11 @@ func (p *Player) Draw(screen *ebiten.Image, playerOne bool) {
 
 func (p *Player) TakeDamage(d int) {
 	if p.takingDamage {
-		return 
+		return
 	}
 
 	p.takingDamage = true
-	p.damagePos = 0        
+	p.damagePos = 0
 	p.damageTimer.Reset()
 	p.damageTimer.Start()
 
@@ -313,7 +335,6 @@ func (p *Player) TakeDamage(d int) {
 		p.Health = 0
 	}
 }
-
 
 func (p *Player) GetSwordHitbox() (Rect, bool) {
 	if p.choice != "Sword" || !p.attacking {
