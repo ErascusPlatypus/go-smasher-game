@@ -41,12 +41,17 @@ type Player struct {
 	hitThisSwing         bool
 	takingDamage         bool
 	hasHit               bool
+	dashing              bool
+	dashHit              bool
+	dashVel              float64
 
 	controls Controls
 
 	shootTimer   *Timer
 	damageTimer  *Timer
 	bombCooldown *Timer
+	dashTimer    *Timer
+	dashCooldown *Timer
 }
 
 var pistolIdlePath = "assets/pistol_idle.png"
@@ -111,11 +116,25 @@ func NewPlayer(choice string, c Controls) *Player {
 		shootTimer:    timer,
 		damageTimer:   NewTimer(120 * time.Millisecond),
 		bombCooldown:  NewTimer(10 * time.Second),
+		dashTimer:     NewTimer(180 * time.Millisecond),
+		dashCooldown:  NewTimer(6 * time.Second),
 		controls:      c,
 	}
 }
 
 func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet, bombList *[]*Bomb) {
+	if p.dashing {
+		p.VelY = 0
+		p.X += p.dashVel
+
+		if p.dashTimer.IsReady() {
+			p.dashing = false
+			p.dashTimer.Stop()
+		}
+
+		return
+	}
+
 	if p.attacking {
 		p.sprite = p.attackSprites[p.attackPos]
 	} else if p.takingDamage {
@@ -126,8 +145,31 @@ func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet, bombList *[
 		p.sprite = p.idleSprite
 	}
 
+	if p.dashCooldown.IsActive() && p.dashCooldown.IsReady() {
+		p.dashCooldown.Stop()
+	}
+
 	if p.bombCooldown.IsActive() && p.bombCooldown.IsReady() {
 		p.bombCooldown.Stop()
+	}
+
+	if p.choice == "Sword" &&
+		inpututil.IsKeyJustPressed(p.controls.SpecialOne) &&
+		!p.dashing &&
+		!p.dashCooldown.IsActive() &&
+		!p.takingDamage {
+
+		p.dashing = true
+		p.dashHit = false
+
+		if p.facingRight {
+			p.dashVel = 18
+		} else {
+			p.dashVel = -18
+		}
+
+		p.dashTimer.Start()
+		p.dashCooldown.Start()
 	}
 
 	if p.choice == "Pistol" &&
@@ -354,6 +396,26 @@ func (p *Player) GetSwordHitbox() (Rect, bool) {
 	y := p.Y + p.Height*0.3
 
 	return NewRect(x, y, width, height), true
+}
+
+func (p *Player) GetDashHitbox() (Rect, bool) {
+	if !p.dashing || p.choice != "Sword" || p.dashHit {
+		return Rect{}, false
+	}
+
+	w := 90.0
+	h := 50.0
+
+	x := p.X
+	if p.facingRight {
+		x += p.Width / 2
+	} else {
+		x -= p.Width/2 + w
+	}
+
+	y := p.Y + p.Height*0.3
+
+	return NewRect(x, y, w, h), true
 }
 
 func (p *Player) GetRect() Rect {

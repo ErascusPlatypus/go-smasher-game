@@ -123,6 +123,20 @@ func (g *Game) Update() error {
 			}
 		}
 
+		if box, ok := g.playerOne.GetDashHitbox(); ok {
+			if box.Intersects(g.playerTwo.GetRect()) {
+				g.playerTwo.TakeDamage(35)
+				g.playerOne.dashHit = true
+			}
+		}
+
+		if box, ok := g.playerTwo.GetDashHitbox(); ok {
+			if box.Intersects(g.playerOne.GetRect()) {
+				g.playerOne.TakeDamage(35)
+				g.playerTwo.dashHit = true
+			}
+		}
+
 		activeBombs := []*Bomb{}
 
 		for _, b := range g.BombsOne {
@@ -247,8 +261,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		DrawPlatform(screen, p)
 	}
 
-	// drawHitbox(screen, g.playerOne)
-	// drawHitbox(screen, g.playerTwo)
+	drawHitbox(screen, g.playerOne)
+	drawHitbox(screen, g.playerTwo)
 
 	g.playerOne.Draw(screen, true)
 	g.playerTwo.Draw(screen, false)
@@ -317,7 +331,7 @@ func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
 
 	text.Draw(
 		screen,
-		"W / S  Move   SPACE  Select",
+		"W / S  Move   SHIFT Select",
 		DefaultFont,
 		160,
 		260,
@@ -326,7 +340,7 @@ func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
 
 	text.Draw(
 		screen,
-		"↑ / ↓  Move   SHIFT  Select",
+		"↑ / ↓  Move   ENTER Select",
 		DefaultFont,
 		700,
 		260,
