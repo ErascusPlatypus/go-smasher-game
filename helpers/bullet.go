@@ -43,7 +43,7 @@ func (b *Bullet) Update() {
 	}
 }
 
-func (b *Bullet) Draw(screen *ebiten.Image) {
+func (b *Bullet) Draw(screen *ebiten.Image, playerOne bool) {
 	if !b.Active {
 		return
 	}
@@ -57,7 +57,17 @@ func (b *Bullet) Draw(screen *ebiten.Image) {
 		b.X+float64(w)/2,
 		b.Y+float64(h)/2,
 	)
+	if playerOne {
+		opts.ColorScale.Scale(0.4, 0.4, 1.0, 1.0)
+	} else {
+		opts.ColorScale.Scale(1.0, 0.4, 0.4, 1.0)
+	}
 
 	screen.DrawImage(b.sprite, opts)
+}
+
+func (b *Bullet) GetRect() Rect {
+    w, h := b.sprite.Bounds().Dx(), b.sprite.Bounds().Dy()
+    return NewRect(b.X, b.Y, float64(w), float64(h))
 }
 
