@@ -9,6 +9,7 @@ import (
 
 var (
 	DefaultFont font.Face
+	WinnerFont font.Face
 )
 
 func InitFonts(fsData []byte) {
@@ -19,6 +20,15 @@ func InitFonts(fsData []byte) {
 
 	DefaultFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
 		Size:    24,
+		DPI:     72,
+		Hinting: font.HintingFull,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	WinnerFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
+		Size:    60,
 		DPI:     72,
 		Hinting: font.HintingFull,
 	})

@@ -161,6 +161,11 @@ func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet, bombList *[
 
 		p.dashing = true
 		p.dashHit = false
+		p.VelY = JumpVelocity + 4
+		p.onGround = false
+		p.attacking = true
+		p.attackPos = 0
+		p.shootTimer.Start()
 
 		if p.facingRight {
 			p.dashVel = 18
@@ -343,6 +348,10 @@ func (p *Player) Draw(screen *ebiten.Image, playerOne bool) {
 		opts.ColorScale.Scale(0.4, 0.4, 1.0, 1.0)
 	} else {
 		opts.ColorScale.Scale(1.0, 0.4, 0.4, 1.0)
+	}
+
+	if p.dashing {
+		opts.ColorScale.Scale(1.6, 1.4, 0.4, 1.0)
 	}
 
 	hp := fmt.Sprintf("HP : %d", p.Health)

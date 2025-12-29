@@ -33,6 +33,7 @@ var PlayerTwoControls = Controls{
 const (
 	StateChoice GameState = iota
 	StatePlaying
+	StateGameOver
 )
 
 type Game struct {
@@ -53,7 +54,7 @@ type Game struct {
 	choiceIndexTwo int
 }
 
-func (g *Game) updateChoice(choiceOne, choiceTwo bool) {
+func (g *Game) updateChoice() {
 	if inpututil.IsKeyJustPressed(ebiten.KeyDown) {
 		g.choiceIndexTwo = (g.choiceIndexTwo + 1) % len(choices)
 	}
@@ -97,14 +98,7 @@ func (g *Game) updateChoice(choiceOne, choiceTwo bool) {
 func (g *Game) Update() error {
 	switch g.State {
 	case StateChoice:
-		var choiceOne, choiceTwo bool
-		if ebiten.IsKeyPressed(ebiten.KeyEnter) {
-			choiceOne = true
-		}
-		if ebiten.IsKeyPressed(ebiten.KeyShift) {
-			choiceTwo = true
-		}
-		g.updateChoice(choiceOne, choiceTwo)
+		g.updateChoice()
 	case StatePlaying:
 		g.playerOne.Update(g.Platforms, &g.BulletsOne, &g.BombsOne)
 		g.playerTwo.Update(g.Platforms, &g.BulletsTwo, &g.BombsTwo)
@@ -241,6 +235,30 @@ func (g *Game) Update() error {
 		}
 
 		g.BulletsTwo = activeBullets
+
+		if g.playerOne.Health <= 0 || g.playerTwo.Health <= 0 {
+			g.State = StateGameOver
+		}
+
+	case StateGameOver:
+		g.State = StateGameOver
+
+		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
+			g := &Game{
+				State:      StateChoice,
+				BulletsOne: []*Bullet{},
+				BulletsTwo: []*Bullet{},
+			}
+
+			g.Platforms = []Platform{
+				{X: 0, Y: 700, Width: 1200, Height: 10},
+
+				{X: 200, Y: 550, Width: 140, Height: 10},
+				{X: 500, Y: 400, Width: 150, Height: 10},
+				{X: 850, Y: 550, Width: 140, Height: 10},
+			}
+		}
+
 	}
 	return nil
 }
@@ -257,12 +275,18 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		return
 	}
 
+	if g.State == StateGameOver {
+		winnerOne := g.playerTwo.Health <= 0
+		g.loadEndScreen(screen, winnerOne)
+		return
+	}
+
 	for _, p := range g.Platforms {
 		DrawPlatform(screen, p)
 	}
 
-	drawHitbox(screen, g.playerOne)
-	drawHitbox(screen, g.playerTwo)
+	// drawHitbox(screen, g.playerOne)
+	// drawHitbox(screen, g.playerTwo)
 
 	g.playerOne.Draw(screen, true)
 	g.playerTwo.Draw(screen, false)
@@ -281,17 +305,14 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	for _, b := range g.BombsTwo {
 		b.Draw(screen)
 	}
-
 }
 
 func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
 	lineHeight := 42
 
 	leftPanel := ebiten.NewImage(500, 420)
-	// leftPanel.Fill(color.RGBA{200, 220, 255, 255})
 
 	rightPanel := ebiten.NewImage(500, 420)
-	// rightPanel.Fill(color.RGBA{255, 210, 210, 255})
 
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(80, 180)
@@ -401,6 +422,36 @@ func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
 			col,
 		)
 	}
+}
+
+func (g *Game) loadEndScreen(screen *ebiten.Image, winnerOne bool) {
+	winText := "Player 2 is the Winner!!"
+	col := color.RGBA{0, 0, 255, 255}
+
+	if winnerOne {
+		winText = "Player 1 is the Winner!!!"
+		col = color.RGBA{255, 0, 0, 255}
+	}
+
+	x := 600 - len(winText)*6
+
+	text.Draw(
+		screen,
+		winText,
+		WinnerFont,
+		x-150,
+		300,
+		col,
+	)
+
+	text.Draw(
+		screen,
+		"Press Enter to restart the game",
+		DefaultFont,
+		x,
+		500,
+		color.Black,
+	)
 }
 
 func drawHitbox(screen *ebiten.Image, p *Player) {
