@@ -95,6 +95,101 @@ func (g *Game) updateChoice() {
 	}
 }
 
+func handleSwords(attacker, target *Player) {
+	if box, ok := attacker.GetSwordHitbox(); ok {
+		if box.Intersects(target.GetRect()) && !attacker.hitThisSwing {
+			target.TakeDamage(15)
+			attacker.hitThisSwing = true 
+		}
+	}
+}
+
+func (g *Game) handleSwordDamage() {
+	handleSwords(g.playerOne, g.playerTwo)
+	handleSwords(g.playerTwo, g.playerOne)
+}
+
+func handleSwordSpecial(attacker, target *Player) {
+	if box, ok := attacker.GetDashHitbox(); ok {
+		if box.Intersects(target.GetRect()) {
+			target.TakeDamage(35)
+			attacker.dashHit = true 
+		}
+	}
+}
+
+func (g *Game) handleSwordSpecialDamage() {
+	handleSwordSpecial(g.playerOne, g.playerTwo)
+	handleSwordSpecial(g.playerTwo, g.playerOne)
+}
+
+func handlePistolSpecial(bombs *[]*Bomb, target *Player) {
+	active := (*bombs)[:0]
+
+	for _, b := range *bombs {
+
+		if b.Active {
+			b.Update()
+
+			if b.HitsPlayer(target) {
+				b.Active = false
+				b.Exploded = true
+				b.ExplosionTTL = 20
+			}
+		}
+
+		if b.Exploded {
+			if !b.HasDamaged && b.HitsPlayer(target) {
+				target.TakeDamage(35)
+				b.HasDamaged = true
+			}
+
+			b.ExplosionTTL--
+			if b.ExplosionTTL > 0 {
+				active = append(active, b)
+			}
+			continue
+		}
+
+		if b.Active {
+			active = append(active, b)
+		}
+	}
+
+	*bombs = active
+}
+
+func (g *Game) handlePistolSpecialDamage() {
+	handlePistolSpecial(&g.BombsOne, g.playerTwo)
+	handlePistolSpecial(&g.BombsTwo, g.playerOne)
+}
+
+func handleBullets(bullets *[]*Bullet, attacker, target *Player) {
+	active := (*bullets)[:0] 
+
+	for _, b := range *bullets {
+		b.Update()
+		if !b.Active {
+			continue
+		}
+
+		if b.GetRect().Intersects(target.GetRect()) {
+			target.TakeDamage(10)
+			b.Active = false
+			continue
+		}
+
+		active = append(active, b)
+	}
+
+	*bullets = active
+}
+
+func (g *Game) handlePistolDamage() {
+	handleBullets(&g.BulletsOne, g.playerOne, g.playerTwo)
+	handleBullets(&g.BulletsTwo, g.playerTwo, g.playerOne)
+}
+
 func (g *Game) Update() error {
 	switch g.State {
 	case StateChoice:
@@ -103,162 +198,20 @@ func (g *Game) Update() error {
 		g.playerOne.Update(g.Platforms, &g.BulletsOne, &g.BombsOne)
 		g.playerTwo.Update(g.Platforms, &g.BulletsTwo, &g.BombsTwo)
 
-		if box, ok := g.playerOne.GetSwordHitbox(); ok {
-			if box.Intersects(g.playerTwo.GetRect()) && !g.playerOne.hitThisSwing {
-				g.playerTwo.TakeDamage(20)
-				g.playerOne.hitThisSwing = true
-			}
-		}
+		g.handleSwordDamage()
+		g.handleSwordSpecialDamage()
 
-		if box, ok := g.playerTwo.GetSwordHitbox(); ok {
-			if box.Intersects(g.playerOne.GetRect()) && !g.playerTwo.hitThisSwing {
-				g.playerOne.TakeDamage(20)
-				g.playerTwo.hitThisSwing = true
-			}
-		}
-
-		if box, ok := g.playerOne.GetDashHitbox(); ok {
-			if box.Intersects(g.playerTwo.GetRect()) {
-				g.playerTwo.TakeDamage(35)
-				g.playerOne.dashHit = true
-			}
-		}
-
-		if box, ok := g.playerTwo.GetDashHitbox(); ok {
-			if box.Intersects(g.playerOne.GetRect()) {
-				g.playerOne.TakeDamage(35)
-				g.playerTwo.dashHit = true
-			}
-		}
-
-		activeBombs := []*Bomb{}
-
-		for _, b := range g.BombsOne {
-
-			if !b.Exploded && b.HitsPlayer(g.playerTwo) {
-				b.Exploded = true
-				b.Active = false
-				b.ExplosionTTL = 20
-			}
-
-			if b.Active {
-				b.Update()
-			}
-
-			if b.Exploded {
-				if !b.HasDamaged && b.HitsPlayer(g.playerTwo) {
-					g.playerTwo.TakeDamage(35)
-					b.HasDamaged = true
-				}
-
-				b.ExplosionTTL--
-				if b.ExplosionTTL > 0 {
-					activeBombs = append(activeBombs, b)
-				}
-				continue
-			}
-
-			if b.Active {
-				activeBombs = append(activeBombs, b)
-			}
-		}
-
-		g.BombsOne = activeBombs
-
-		activeBombs = []*Bomb{}
-
-		for _, b := range g.BombsTwo {
-			if !b.Exploded && b.HitsPlayer(g.playerOne) {
-				b.Exploded = true
-				b.Active = false
-				b.ExplosionTTL = 20
-			}
-
-			if b.Active {
-				b.Update()
-			}
-
-			if b.Exploded {
-				if !b.HasDamaged && b.HitsPlayer(g.playerOne) {
-					g.playerOne.TakeDamage(35)
-					b.HasDamaged = true
-				}
-
-				b.ExplosionTTL--
-				if b.ExplosionTTL > 0 {
-					activeBombs = append(activeBombs, b)
-				}
-				continue
-			}
-
-			if b.Active {
-				activeBombs = append(activeBombs, b)
-			}
-		}
-
-		g.BombsTwo = activeBombs
-
-		activeBullets := []*Bullet{}
-		for _, b := range g.BulletsOne {
-			b.Update()
-			if !b.Active {
-				continue
-			}
-
-			if b.GetRect().Intersects(g.playerTwo.GetRect()) {
-				g.playerTwo.TakeDamage(10)
-				b.Active = false
-			}
-
-			if b.Active {
-				activeBullets = append(activeBullets, b)
-			}
-		}
-
-		g.BulletsOne = activeBullets
-
-		activeBullets = []*Bullet{}
-		for _, b := range g.BulletsTwo {
-			b.Update()
-			if !b.Active {
-				continue
-			}
-
-			if b.GetRect().Intersects(g.playerOne.GetRect()) {
-				g.playerOne.TakeDamage(10)
-				b.Active = false
-			}
-
-			if b.Active {
-				activeBullets = append(activeBullets, b)
-			}
-		}
-
-		g.BulletsTwo = activeBullets
+		g.handlePistolDamage()
+		g.handlePistolSpecialDamage()
 
 		if g.playerOne.Health <= 0 || g.playerTwo.Health <= 0 {
 			g.State = StateGameOver
 		}
 
 	case StateGameOver:
-		g.State = StateGameOver
-
 		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-			g := &Game{
-				State:      StateChoice,
-				BulletsOne: []*Bullet{},
-				BulletsTwo: []*Bullet{},
-			}
-
-			g.Platforms = []Platform{
-				{X: 0, Y: 700, Width: 1200, Height: 10},
-
-				{X: 200, Y: 550, Width: 140, Height: 10},
-				{X: 500, Y: 400, Width: 150, Height: 10},
-				{X: 850, Y: 550, Width: 140, Height: 10},
-			}
+			g.Reset()
 		}
-
 	}
 	return nil
 }
@@ -421,6 +374,34 @@ func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
 			y,
 			col,
 		)
+	}
+}
+
+func (g *Game) Reset() {
+	g.State = StateChoice
+
+	g.playerOne = nil
+	g.playerTwo = nil
+
+	g.StatePlayerOne = StateChoice
+	g.StatePlayerTwo = StateChoice
+
+	g.choiceOne = ""
+	g.choiceTwo = ""
+
+	g.choiceIndexOne = 0
+	g.choiceIndexTwo = 0
+
+	g.BulletsOne = []*Bullet{}
+	g.BulletsTwo = []*Bullet{}
+	g.BombsOne = []*Bomb{}
+	g.BombsTwo = []*Bomb{}
+
+	g.Platforms = []Platform{
+		{X: 0, Y: 700, Width: 1200, Height: 10},
+		{X: 200, Y: 550, Width: 140, Height: 10},
+		{X: 500, Y: 400, Width: 150, Height: 10},
+		{X: 850, Y: 550, Width: 140, Height: 10},
 	}
 }
 

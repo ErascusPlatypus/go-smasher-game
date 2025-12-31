@@ -33,6 +33,7 @@ type Player struct {
 	damageSprites        []*ebiten.Image
 	walkPos              int
 	walkTimer, walkDelay int
+	isWalking bool 
 	facingRight          bool
 	attackPos            int
 	damagePos            int
@@ -122,108 +123,124 @@ func NewPlayer(choice string, c Controls) *Player {
 	}
 }
 
-func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet, bombList *[]*Bomb) {
-	if p.dashing {
-		p.VelY = 0
-		p.X += p.dashVel
-
-		if p.dashTimer.IsReady() {
-			p.dashing = false
-			p.dashTimer.Stop()
-		}
-
-		return
-	}
-
-	if p.attacking {
-		p.sprite = p.attackSprites[p.attackPos]
-	} else if p.takingDamage {
-		p.sprite = p.damageSprites[p.damagePos]
-	} else if p.VelX != 0 {
-		p.sprite = p.walkSprites[p.walkPos]
-	} else {
-		p.sprite = p.idleSprite
-	}
-
+func (p *Player) updateCooldowns() {
 	if p.dashCooldown.IsActive() && p.dashCooldown.IsReady() {
 		p.dashCooldown.Stop()
 	}
-
 	if p.bombCooldown.IsActive() && p.bombCooldown.IsReady() {
 		p.bombCooldown.Stop()
 	}
+}
 
-	if p.choice == "Sword" &&
-		inpututil.IsKeyJustPressed(p.controls.SpecialOne) &&
-		!p.dashing &&
-		!p.dashCooldown.IsActive() &&
-		!p.takingDamage {
-
-		p.dashing = true
-		p.dashHit = false
-		p.VelY = JumpVelocity + 4
-		p.onGround = false
-		p.attacking = true
-		p.attackPos = 0
-		p.shootTimer.Start()
-
-		if p.facingRight {
-			p.dashVel = 18
-		} else {
-			p.dashVel = -18
-		}
-
-		p.dashTimer.Start()
-		p.dashCooldown.Start()
+func (p *Player) handleDash() bool {
+	if !p.dashing {
+		return false
 	}
 
-	if p.choice == "Pistol" &&
-		inpututil.IsKeyJustPressed(p.controls.SpecialOne) &&
-		!p.bombCooldown.IsActive() {
+	p.VelY = 0
+	p.X += p.dashVel
 
+	if p.dashTimer.IsReady() {
+		p.dashing = false
+		p.dashTimer.Stop()
+	}
+
+	return true
+}
+
+func (p *Player) handleSpecial(bombs *[]*Bomb) {
+	if inpututil.IsKeyJustPressed(p.controls.SpecialOne) {
+
+		if p.choice == "Sword" &&
+			!p.dashing &&
+			!p.dashCooldown.IsActive() &&
+			!p.takingDamage {
+
+			p.startDash()
+		}
+
+		if p.choice == "Pistol" &&
+			!p.bombCooldown.IsActive() {
+
+			p.throwBomb(bombs)
+		}
+	}
+}
+
+func (p *Player) startDash() {
+	p.dashing = true
+	p.dashHit = false
+	p.attacking = true
+	p.attackPos = 0
+
+	p.VelY = JumpVelocity + 4
+	p.onGround = false
+
+	p.dashVel = 18
+	if !p.facingRight {
+		p.dashVel = -18
+	}
+
+	p.shootTimer.Start()
+	p.dashTimer.Start()
+	p.dashCooldown.Start()
+}
+
+func (p *Player) throwBomb(bombs *[]*Bomb) {
+	bx := p.X
+	if p.facingRight {
+		bx += p.Width / 2
+	} else {
+		bx -= p.Width / 2
+	}
+
+	by := p.Y + p.Height*0.4
+	*bombs = append(*bombs, NewBomb(bx, by, p.facingRight))
+	p.bombCooldown.Start()
+}
+
+func (p *Player) handleAttack(bullets *[]*Bullet) {
+	if p.takingDamage || !ebiten.IsKeyPressed(p.controls.Attack) {
+		return
+	}
+
+	if p.choice == "Pistol" {
+		p.handlePistol(bullets)
+	}
+
+	if p.choice == "Sword" && inpututil.IsKeyJustPressed(p.controls.Attack) && !p.attacking {
+		p.startSwordAttack()
+	}
+}
+
+func (p *Player) handlePistol(bullets *[]*Bullet) {
+	if !p.shootTimer.IsActive() {
+		p.shootTimer.Start()
+	}
+
+	if p.shootTimer.IsReady() {
 		bx := p.X
 		if p.facingRight {
-			bx += p.Width / 2
-		} else {
-			bx -= p.Width / 2
+			bx += p.Width
 		}
-
 		by := p.Y + p.Height*0.4
 
-		*bombList = append(*bombList, NewBomb(bx, by, p.facingRight))
-		p.bombCooldown.Start()
+		*bullets = append(*bullets, NewBullet(bx, by, p.facingRight))
+		p.shootTimer.Reset()
 	}
+}
 
-	if !p.takingDamage && ebiten.IsKeyPressed(p.controls.Attack) {
-		if p.choice == "Pistol" {
-			if !p.shootTimer.IsActive() {
-				p.shootTimer.Start()
-			}
+func (p *Player) startSwordAttack() {
+	p.VelY = JumpVelocity + 4
+	p.onGround = false
+	p.attacking = true
+	p.attackPos = 0
+	p.shootTimer.Start()
+}
 
-			if p.shootTimer.IsReady() {
-				bx := p.X
-				if p.facingRight {
-					bx += p.Width
-				}
-
-				by := p.Y + p.Height*0.4
-				*bulletList = append(*bulletList, NewBullet(bx, by, p.facingRight))
-				p.shootTimer.Reset()
-			}
-		}
-
-		if p.choice == "Sword" && inpututil.IsKeyJustPressed(p.controls.Attack) && !p.attacking {
-			p.VelY = JumpVelocity + 4
-			p.onGround = false
-			p.attacking = true
-			p.attackPos = 0
-			p.shootTimer.Start()
-		}
-	}
-
+func (p *Player) handleDamageAnimation() {
 	if p.takingDamage && p.damageTimer.IsReady() {
 		p.damagePos++
-
 		if p.damagePos >= len(p.damageSprites) {
 			p.damagePos = 0
 			p.takingDamage = false
@@ -232,10 +249,11 @@ func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet, bombList *[
 			p.damageTimer.Reset()
 		}
 	}
+}
 
+func (p *Player) handleAttackAnimation() {
 	if p.attacking && p.shootTimer.IsReady() {
 		p.attackPos++
-
 		if p.attackPos >= len(p.attackSprites) {
 			p.attacking = false
 			p.hitThisSwing = false
@@ -245,50 +263,58 @@ func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet, bombList *[
 			p.shootTimer.Reset()
 		}
 	}
+}
 
-	if ebiten.IsKeyPressed(p.controls.Jump) && p.onGround && !p.takingDamage {
+func (p *Player) handleMovementInput() {
+	p.isWalking = false
+
+	if p.takingDamage {
+		return
+	}
+
+	if ebiten.IsKeyPressed(p.controls.Jump) && p.onGround {
 		p.VelY = JumpVelocity
 		p.onGround = false
 	}
 
-	if !p.attacking && ebiten.IsKeyPressed(p.controls.Right) && !p.takingDamage {
-		p.VelX = VelX
-		p.walkTimer++
-
-		p.facingRight = true
-
-		if p.walkTimer >= p.walkDelay {
-			p.walkTimer = 0
-			p.walkPos = (p.walkPos + 1) % len(p.walkSprites)
-		}
-
-		p.sprite = p.walkSprites[p.walkPos]
+	if !p.attacking && ebiten.IsKeyPressed(p.controls.Right) {
+		p.moveHorizontal(true)
+		p.isWalking = true
 	}
 
-	if !p.attacking && ebiten.IsKeyPressed(p.controls.Left) && !p.takingDamage {
+	if !p.attacking && ebiten.IsKeyPressed(p.controls.Left) {
+		p.moveHorizontal(false)
+		p.isWalking = true
+	}
+}
+
+
+func (p *Player) moveHorizontal(right bool) {
+	if right {
+		p.VelX = VelX
+		p.facingRight = true
+	} else {
 		p.VelX = -VelX
-		p.walkTimer++
-
 		p.facingRight = false
+	}
 
-		if p.walkTimer >= p.walkDelay {
-			p.walkTimer = 0
+	p.walkTimer++
+	if p.walkTimer >= p.walkDelay {
+		p.walkTimer = 0
+		if right {
+			p.walkPos = (p.walkPos + 1) % len(p.walkSprites)
+		} else {
 			p.walkPos--
 			if p.walkPos < 0 {
 				p.walkPos = len(p.walkSprites) - 1
 			}
 		}
-
-		p.sprite = p.walkSprites[p.walkPos]
 	}
+}
 
-	if ebiten.IsKeyPressed(p.controls.Down) {
-		p.VelY += Gravity
-	}
-
+func (p *Player) applyPhysics(platforms []Platform) {
 	p.VelY += Gravity
 	nextY := p.Y + p.VelY
-
 	p.onGround = false
 
 	for _, plat := range platforms {
@@ -296,19 +322,16 @@ func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet, bombList *[
 			continue
 		}
 
-		if p.VelY > 0 {
-			if p.Y+p.Height <= plat.Y && nextY+p.Height >= plat.Y {
-				nextY = plat.Y - p.Height
-				p.VelY = 0
-				p.onGround = true
-			}
+		if p.VelY > 0 && p.Y+p.Height <= plat.Y && nextY+p.Height >= plat.Y {
+			nextY = plat.Y - p.Height
+			p.VelY = 0
+			p.onGround = true
 		}
 
 		if p.VelY < 0 {
-			platBottom := plat.Y + plat.Height
-
-			if p.Y >= platBottom && nextY <= platBottom {
-				nextY = platBottom
+			bottom := plat.Y + plat.Height
+			if p.Y >= bottom && nextY <= bottom {
+				nextY = bottom
 				p.VelY = 0
 			}
 		}
@@ -316,18 +339,52 @@ func (p *Player) Update(platforms []Platform, bulletList *[]*Bullet, bombList *[
 
 	p.Y = nextY
 	p.X += p.VelX
-
-	halfW := p.Width / 2
-
-	if p.X-halfW < 0 {
-		p.X = halfW
-	}
-
-	if p.X+halfW > 1200 {
-		p.X = 1200 - halfW
-	}
-
 	p.VelX = 0
+}
+
+func (p *Player) clampWorld() {
+	half := p.Width / 2
+	if p.X-half < 0 {
+		p.X = half
+	}
+	if p.X+half > 1200 {
+		p.X = 1200 - half
+	}
+}
+
+func (p *Player) selectSprite() {
+	switch {
+	case p.dashing:
+		// dash sprite already set
+	case p.takingDamage:
+		p.sprite = p.damageSprites[p.damagePos]
+	case p.attacking:
+		p.sprite = p.attackSprites[p.attackPos]
+	case p.isWalking:
+		p.sprite = p.walkSprites[p.walkPos]
+	default:
+		p.sprite = p.idleSprite
+	}
+}
+
+
+func (p *Player) Update(platforms []Platform, bullets *[]*Bullet, bombs *[]*Bomb) {
+	p.updateCooldowns()
+
+	if p.handleDash() {
+		return
+	}
+
+	p.handleSpecial(bombs)
+	p.handleAttack(bullets)
+	p.handleDamageAnimation()
+	p.handleAttackAnimation()
+	p.handleMovementInput()
+
+	p.applyPhysics(platforms)
+	p.clampWorld()
+
+	p.selectSprite()
 }
 
 func (p *Player) Draw(screen *ebiten.Image, playerOne bool) {
