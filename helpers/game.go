@@ -199,7 +199,7 @@ func (g *Game) handlePistolDamage() {
 func handleBowSpecial(attacker, target *Player) {
     if box, ok := attacker.GetPushbackHitbox(); ok {
         if box.Intersects(target.GetRect()) {
-            target.TakeDamage(20)
+            target.TakeDamage(10)
             pushForce := 150.0
             if !attacker.facingRight {
                 pushForce = -150.0

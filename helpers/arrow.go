@@ -18,8 +18,8 @@ type Arrow struct {
 }
 
 const (
-    arrowSpeed   = 12.0
-    arrowGravity = 0.3
+    arrowSpeed   = 10.0
+    arrowGravity = 0.25
 )
 
 var arrowSprite = "assets/arrow.png"
@@ -44,7 +44,30 @@ func NewArrow(x, y float64, dir bool, charged bool) *Arrow {
     }
 }
 
+/*
+
+g.Platforms = []helpers.Platform{
+		{X: 0, Y: 700, Width: 1200, Height: 10},
+
+		{X: 200, Y: 550, Width: 140, Height: 10},
+		{X: 500, Y: 400, Width: 150, Height: 10},
+		{X: 850, Y: 550, Width: 140, Height: 10},
+	}
+
+*/
+
 func (a *Arrow) Update() {
+    if !a.Active{
+        return 
+    }
+
+    if (a.X >= 200 && a.X <= 340 && a.Y >= 550 && a.Y <= 565)  ||
+        (a.X >= 500 && a.X <= 660 && a.Y >= 400 && a.Y <= 415) ||
+        (a.X >= 850 && a.X <= 1000) && a.Y >= 550 && a.Y <= 565 {
+            a.Active = false 
+            return 
+    }
+
     if a.direction {
         a.X += arrowSpeed
     } else {
@@ -58,7 +81,7 @@ func (a *Arrow) Update() {
         a.glowFrame++
     }
 
-    if a.Y < -50 || a.Y > 1200 || a.X < -50 || a.X > 1400 {
+    if a.Y < -50 || a.Y > 700 || a.X < -50 || a.X > 1400 {
         a.Active = false
     }
 }

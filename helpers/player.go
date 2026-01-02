@@ -117,7 +117,7 @@ func NewPlayer(choice string, c Controls) *Player {
 		attackSprites = LoadImages(bowAttackPath)
 		damageSprites = LoadImages(bowDamagePath)
 		deathSprites = LoadImages(bowDeathPath)
-		health = 125
+		health = 100
 	}
 
 	w := float64(idleSprite.Bounds().Dx()) * PlayerScale
@@ -127,7 +127,7 @@ func NewPlayer(choice string, c Controls) *Player {
 	if choice == "Sword" {
 		timer = NewTimer(250 * time.Millisecond)
 	} else if choice == "Bow" {
-		timer = NewTimer(400 * time.Millisecond)
+		timer = NewTimer(1000 * time.Millisecond)
 	} 
 
 	return &Player{
@@ -155,7 +155,7 @@ func NewPlayer(choice string, c Controls) *Player {
 		dashTimer:     NewTimer(180 * time.Millisecond),
 		dashCooldown:  NewTimer(6 * time.Second),
 		pushbackTimer: NewTimer(150 * time.Millisecond),
-		pushbackCooldown: NewTimer(4 * time.Second),
+		pushbackCooldown: NewTimer(8 * time.Second),
 		deathPos:      0,
 		isDead:        false,
 		deathTimer:    NewTimer(120 * time.Millisecond),
@@ -307,7 +307,7 @@ func (p *Player) handleAttack(bullets *[]*Bullet, arrows *[]*Arrow) {
         p.startSwordAttack()
     }
 
-    if p.choice == "Bow" {
+    if p.choice == "Bow" && (!p.shootTimer.IsActive() || p.shootTimer.IsReady() || p.charging) {
         p.handleBowAttack(arrows)
     }
 }
@@ -350,7 +350,7 @@ func (p *Player) handleBowAttack(arrows *[]*Arrow) {
             p.chargeTime = 0
             p.attacking = false
             p.attackPos = 0
-            p.shootTimer.Stop()
+            p.shootTimer.Reset()
         }
 	}
 }
