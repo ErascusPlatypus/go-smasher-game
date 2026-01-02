@@ -10,7 +10,7 @@ import (
 
 type GameState int
 
-var choices = []string{"Sword", "Pistol"}
+var choices = []string{"Sword", "Pistol", "Bow"}
 
 var PlayerOneControls = Controls{
 	Left:       ebiten.KeyA,
@@ -49,9 +49,15 @@ type Game struct {
 	BulletsTwo     []*Bullet
 	BombsOne       []*Bomb
 	BombsTwo       []*Bomb
+	ArrowsOne	   []*Arrow
+	ArrowsTwo      []*Arrow
 
 	choiceIndexOne int
 	choiceIndexTwo int
+
+	PlayingDeathAnimation bool
+	showEndScreen         bool
+	deadPlayer *Player
 }
 
 func (g *Game) updateChoice() {
@@ -99,7 +105,7 @@ func handleSwords(attacker, target *Player) {
 	if box, ok := attacker.GetSwordHitbox(); ok {
 		if box.Intersects(target.GetRect()) && !attacker.hitThisSwing {
 			target.TakeDamage(15)
-			attacker.hitThisSwing = true 
+			attacker.hitThisSwing = true
 		}
 	}
 }
@@ -113,7 +119,7 @@ func handleSwordSpecial(attacker, target *Player) {
 	if box, ok := attacker.GetDashHitbox(); ok {
 		if box.Intersects(target.GetRect()) {
 			target.TakeDamage(35)
-			attacker.dashHit = true 
+			attacker.dashHit = true
 		}
 	}
 }
@@ -165,7 +171,7 @@ func (g *Game) handlePistolSpecialDamage() {
 }
 
 func handleBullets(bullets *[]*Bullet, attacker, target *Player) {
-	active := (*bullets)[:0] 
+	active := (*bullets)[:0]
 
 	for _, b := range *bullets {
 		b.Update()
@@ -190,13 +196,72 @@ func (g *Game) handlePistolDamage() {
 	handleBullets(&g.BulletsTwo, g.playerTwo, g.playerOne)
 }
 
+func handleBowSpecial(attacker, target *Player) {
+    if box, ok := attacker.GetPushbackHitbox(); ok {
+        if box.Intersects(target.GetRect()) {
+            target.TakeDamage(20)
+            pushForce := 150.0
+            if !attacker.facingRight {
+                pushForce = -150.0
+            }
+            target.X += pushForce
+            target.VelY = -8
+            attacker.pushbackHit = true
+        }
+    }
+}
+
+func (g *Game) handleBowSpecialDamage() {
+    handleBowSpecial(g.playerOne, g.playerTwo)
+    handleBowSpecial(g.playerTwo, g.playerOne)
+}
+
+func handleArrows(arrows *[]*Arrow, attacker, target *Player) {
+    active := (*arrows)[:0]
+
+    for _, a := range *arrows {
+        a.Update()
+        if !a.Active {
+            continue
+        }
+
+        if a.GetRect().Intersects(target.GetRect()) {
+            target.TakeDamage(a.GetDamage())
+            a.Active = false
+            continue
+        }
+
+        active = append(active, a)
+    }
+
+    *arrows = active
+}
+
+func (g *Game) handleBowDamage() {
+	handleArrows(&g.ArrowsOne, g.playerOne, g.playerTwo)
+	handleArrows(&g.ArrowsTwo, g.playerTwo, g.playerOne)
+}
+
+func (g *Game) playDeathAnimation(victim *Player) {
+	if victim.deathTimer.IsReady() {
+		victim.deathPos++
+		if victim.deathPos >= len(victim.deathSprites) {
+			victim.deathTimer.Stop()
+			g.PlayingDeathAnimation = false
+			g.showEndScreen = true
+		} else {
+			victim.deathTimer.Reset()
+		}
+	}
+}
+
 func (g *Game) Update() error {
 	switch g.State {
 	case StateChoice:
 		g.updateChoice()
 	case StatePlaying:
-		g.playerOne.Update(g.Platforms, &g.BulletsOne, &g.BombsOne)
-		g.playerTwo.Update(g.Platforms, &g.BulletsTwo, &g.BombsTwo)
+		g.playerOne.Update(g.Platforms, &g.BulletsOne, &g.BombsOne, &g.ArrowsOne)
+		g.playerTwo.Update(g.Platforms, &g.BulletsTwo, &g.BombsTwo, &g.ArrowsTwo)
 
 		g.handleSwordDamage()
 		g.handleSwordSpecialDamage()
@@ -204,16 +269,44 @@ func (g *Game) Update() error {
 		g.handlePistolDamage()
 		g.handlePistolSpecialDamage()
 
+		g.handleBowDamage()
+		g.handleBowSpecialDamage()
+
 		if g.playerOne.Health <= 0 || g.playerTwo.Health <= 0 {
 			g.State = StateGameOver
 		}
 
 	case StateGameOver:
-		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-			g.Reset()
-		}
+        if !g.PlayingDeathAnimation {
+            if g.playerOne.Health <= 0 {
+                g.deadPlayer = g.playerOne
+            } else {
+                g.deadPlayer = g.playerTwo
+            }
+
+            g.deadPlayer.isDead = true
+
+            g.deadPlayer.deathPos = 0
+            g.deadPlayer.deathTimer.Reset()
+            g.deadPlayer.deathTimer.Start()
+																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																									
+            g.PlayingDeathAnimation = true
+        }
+
+        if g.PlayingDeathAnimation && !g.showEndScreen {																																																																																																																																																																																																																																																																																																																												
+            g.deadPlayer.Update(g.Platforms, nil, nil, nil)
+            
+            if g.deadPlayer.deathPos >= len(g.deadPlayer.deathSprites)-1 {
+                g.showEndScreen = true
+            }
+        }
+
+        if g.showEndScreen && inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
+            g.Reset()
+        }
 	}
-	return nil
+
+	return nil 
 }
 
 func (g *Game) Layout(w, h int) (int, int) {
@@ -224,40 +317,43 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(color.White)
 
 	if g.State == StateChoice {
-		g.loadChoiceScreen(screen)
-		return
-	}
+        g.loadChoiceScreen(screen)
+        return
+    }
 
-	if g.State == StateGameOver {
-		winnerOne := g.playerTwo.Health <= 0
-		g.loadEndScreen(screen, winnerOne)
-		return
-	}
+    for _, p := range g.Platforms {
+        DrawPlatform(screen, p)
+    }
 
-	for _, p := range g.Platforms {
-		DrawPlatform(screen, p)
-	}
+    g.playerOne.Draw(screen, true)
+    g.playerTwo.Draw(screen, false)
 
-	// drawHitbox(screen, g.playerOne)
-	// drawHitbox(screen, g.playerTwo)
+    for _, b := range g.BulletsOne {
+        b.Draw(screen, true)
+    }
 
-	g.playerOne.Draw(screen, true)
-	g.playerTwo.Draw(screen, false)
+    for _, b := range g.BulletsTwo {
+        b.Draw(screen, false)
+    }
 
-	for _, b := range g.BulletsOne {
-		b.Draw(screen, true)
-	}
+    for _, b := range g.BombsOne {
+        b.Draw(screen)
+    }
+    for _, b := range g.BombsTwo {
+        b.Draw(screen)
+    }
 
-	for _, b := range g.BulletsTwo {
-		b.Draw(screen, false)
-	}
+	for _, a := range g.ArrowsOne {
+        a.Draw(screen, true)
+    }
+    for _, a := range g.ArrowsTwo {
+        a.Draw(screen, false)
+    }
 
-	for _, b := range g.BombsOne {
-		b.Draw(screen)
-	}
-	for _, b := range g.BombsTwo {
-		b.Draw(screen)
-	}
+    if g.State == StateGameOver && g.showEndScreen {
+        winnerOne := g.deadPlayer == g.playerTwo
+        g.loadEndScreenOverlay(screen, winnerOne)
+    }
 }
 
 func (g *Game) loadChoiceScreen(screen *ebiten.Image) {
@@ -396,13 +492,53 @@ func (g *Game) Reset() {
 	g.BulletsTwo = []*Bullet{}
 	g.BombsOne = []*Bomb{}
 	g.BombsTwo = []*Bomb{}
+	g.ArrowsOne = []*Arrow{}
+	g.ArrowsTwo = []*Arrow{}
+
+	g.PlayingDeathAnimation = false 
+	g.deadPlayer = &Player{}
+	g.showEndScreen = false 
 
 	g.Platforms = []Platform{
 		{X: 0, Y: 700, Width: 1200, Height: 10},
 		{X: 200, Y: 550, Width: 140, Height: 10},
 		{X: 500, Y: 400, Width: 150, Height: 10},
-		{X: 850, Y: 550, Width: 140, Height: 10},
+		{X: 850, Y: 550, Width: 140, Height: 10},	
 	}
+}
+
+func (g *Game) loadEndScreenOverlay(screen *ebiten.Image, winnerOne bool) {
+    overlay := ebiten.NewImage(1200, 800)
+    overlay.Fill(color.RGBA{0, 0, 0, 180})
+    screen.DrawImage(overlay, nil)
+
+    winText := "Player 2 is the Winner!!"
+    col := color.RGBA{100, 100, 255, 255}
+
+    if winnerOne {
+        winText = "Player 1 is the Winner!!!"
+        col = color.RGBA{255, 100, 100, 255}
+    }
+
+    x := 600 - len(winText)*6
+
+    text.Draw(
+        screen,
+        winText,
+        WinnerFont,
+        x-150,
+        300,
+        col,
+    )
+
+    text.Draw(
+        screen,
+        "Press Enter to restart the game",
+        DefaultFont,
+        x,
+        500,
+        color.White,
+    )
 }
 
 func (g *Game) loadEndScreen(screen *ebiten.Image, winnerOne bool) {

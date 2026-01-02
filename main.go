@@ -20,8 +20,7 @@ func main() {
 
 	g := &helpers.Game{
 		State:   StateChoice,
-		BulletsOne: []*helpers.Bullet{},
-		BulletsTwo: []*helpers.Bullet{},
+		PlayingDeathAnimation: false,
 	}
 
 	g.Platforms = []helpers.Platform{

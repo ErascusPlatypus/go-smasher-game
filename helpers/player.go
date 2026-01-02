@@ -23,46 +23,68 @@ type Player struct {
 	Width, Height    float64
 	OffsetX, OffsetY float64
 
-	VelY, VelX           float64
-	onGround             bool
-	choice               string
-	sprite               *ebiten.Image
-	idleSprite           *ebiten.Image
-	walkSprites          []*ebiten.Image
-	attackSprites        []*ebiten.Image
-	damageSprites        []*ebiten.Image
+	VelY, VelX    float64
+	onGround      bool
+	choice        string
+	sprite        *ebiten.Image
+	idleSprite    *ebiten.Image
+	walkSprites   []*ebiten.Image
+	attackSprites []*ebiten.Image
+	damageSprites []*ebiten.Image
+	deathSprites  []*ebiten.Image
+
 	walkPos              int
 	walkTimer, walkDelay int
-	isWalking bool 
-	facingRight          bool
-	attackPos            int
-	damagePos            int
-	attacking            bool
-	Health               int
-	hitThisSwing         bool
-	takingDamage         bool
-	hasHit               bool
-	dashing              bool
-	dashHit              bool
-	dashVel              float64
+	isWalking            bool
+	isDead               bool
+
+	deathPos     int
+	facingRight  bool
+	attackPos    int
+	damagePos    int
+	attacking    bool
+	Health       int
+	hitThisSwing bool
+	takingDamage bool
+	hasHit       bool
+	dashing      bool
+	dashHit      bool
+	dashVel      float64
+
+	charging bool
+	chargeTime int
+	pushbackActive bool 
+	pushbackHit bool 
 
 	controls Controls
 
 	shootTimer   *Timer
 	damageTimer  *Timer
+	deathTimer   *Timer
 	bombCooldown *Timer
 	dashTimer    *Timer
 	dashCooldown *Timer
+	pushbackTimer *Timer
+	pushbackCooldown *Timer
 }
 
 var pistolIdlePath = "assets/pistol_idle.png"
 var pistolWalkPath = "assets/pistol_run_*.png"
 var pistolDamagePath = "assets/pistol_hit_*.png"
+var pistolDeathPath = "assets/pistol_death_*.png"
 
 var swordIdlePath = "assets/sword_idle.png"
 var swordWalkPath = "assets/sword_run_*.png"
 var swordAttackPath = "assets/sword_combo_*.png"
 var swordDamagePath = "assets/sword_hit_*.png"
+var swordDeathPath = "assets/sword_death_*.png"
+
+var bowIdlePath = "assets/bow_idle_01.png"
+var bowWalkPath = "assets/bow_walk_*.png"
+var bowAttackPath = "assets/bow_attack_*.png"
+var bowDamagePath = "assets/bow_hit_*.png"
+var bowDeathPath = "assets/bow_death_*.png"
+
 
 const PlayerScale = 0.75
 
@@ -71,6 +93,7 @@ func NewPlayer(choice string, c Controls) *Player {
 	var walkSprites []*ebiten.Image
 	var attackSprites []*ebiten.Image
 	var damageSprites []*ebiten.Image
+	var deathSprites []*ebiten.Image
 
 	var health int
 
@@ -79,13 +102,22 @@ func NewPlayer(choice string, c Controls) *Player {
 		walkSprites = LoadImages(swordWalkPath)
 		attackSprites = LoadImages(swordAttackPath)
 		damageSprites = LoadImages(swordDamagePath)
+		deathSprites = LoadImages(swordDeathPath)
 		health = 150
 	} else if choice == "Pistol" {
 		idleSprite = LoadImage(pistolIdlePath)
 		walkSprites = LoadImages(pistolWalkPath)
 		attackSprites = walkSprites
 		damageSprites = LoadImages(pistolDamagePath)
+		deathSprites = LoadImages(pistolDeathPath)
 		health = 100
+	} else if choice == "Bow" {
+		idleSprite = LoadImage(bowIdlePath)
+		walkSprites = LoadImages(bowWalkPath)
+		attackSprites = LoadImages(bowAttackPath)
+		damageSprites = LoadImages(bowDamagePath)
+		deathSprites = LoadImages(bowDeathPath)
+		health = 125
 	}
 
 	w := float64(idleSprite.Bounds().Dx()) * PlayerScale
@@ -94,7 +126,9 @@ func NewPlayer(choice string, c Controls) *Player {
 	var timer = NewTimer(500 * time.Millisecond)
 	if choice == "Sword" {
 		timer = NewTimer(250 * time.Millisecond)
-	}
+	} else if choice == "Bow" {
+		timer = NewTimer(400 * time.Millisecond)
+	} 
 
 	return &Player{
 		X:             100,
@@ -106,6 +140,7 @@ func NewPlayer(choice string, c Controls) *Player {
 		walkSprites:   walkSprites,
 		attackSprites: attackSprites,
 		damageSprites: damageSprites,
+		deathSprites:  deathSprites,
 		Health:        health,
 		choice:        choice,
 		attackPos:     0,
@@ -119,7 +154,14 @@ func NewPlayer(choice string, c Controls) *Player {
 		bombCooldown:  NewTimer(10 * time.Second),
 		dashTimer:     NewTimer(180 * time.Millisecond),
 		dashCooldown:  NewTimer(6 * time.Second),
+		pushbackTimer: NewTimer(150 * time.Millisecond),
+		pushbackCooldown: NewTimer(4 * time.Second),
+		deathPos:      0,
+		isDead:        false,
+		deathTimer:    NewTimer(120 * time.Millisecond),
 		controls:      c,
+		charging: false,
+		chargeTime: 0,
 	}
 }
 
@@ -129,6 +171,10 @@ func (p *Player) updateCooldowns() {
 	}
 	if p.bombCooldown.IsActive() && p.bombCooldown.IsReady() {
 		p.bombCooldown.Stop()
+	}
+
+	if p.pushbackCooldown.IsActive() && p.pushbackCooldown.IsReady() {
+		p.pushbackCooldown.Stop()
 	}
 }
 
@@ -148,6 +194,49 @@ func (p *Player) handleDash() bool {
 	return true
 }
 
+func (p *Player) startPushback() {
+	p.pushbackActive = true 
+	p.pushbackHit = false 
+	p.attacking = true 
+	p.attackPos = 0 
+	p.pushbackTimer.Start()
+	p.pushbackCooldown.Start()
+}
+
+func (p *Player) handlePushback() bool {
+	if !p.pushbackActive {
+		return false 
+	}
+
+	if p.pushbackTimer.IsReady() {
+		p.pushbackActive = false 
+		p.pushbackTimer.Stop()
+		p.attacking = false 
+	}
+
+	return true 
+}
+
+func (p *Player) GetPushbackHitbox() (Rect, bool) {
+    if !p.pushbackActive || p.choice != "Bow" || p.pushbackHit {
+        return Rect{}, false
+    }
+
+    w := 80.0
+    h := 60.0
+
+    x := p.X
+    if p.facingRight {
+        x += p.Width / 2
+    } else {
+        x -= p.Width/2 + w
+    }
+
+    y := p.Y + p.Height*0.2
+
+    return NewRect(x, y, w, h), true
+}
+
 func (p *Player) handleSpecial(bombs *[]*Bomb) {
 	if inpututil.IsKeyJustPressed(p.controls.SpecialOne) {
 
@@ -164,6 +253,12 @@ func (p *Player) handleSpecial(bombs *[]*Bomb) {
 
 			p.throwBomb(bombs)
 		}
+
+		if p.choice == "Bow" && 
+			!p.pushbackActive && 
+			!p.pushbackCooldown.IsActive() {
+				p.startPushback()
+			}
 	}
 }
 
@@ -199,21 +294,68 @@ func (p *Player) throwBomb(bombs *[]*Bomb) {
 	p.bombCooldown.Start()
 }
 
-func (p *Player) handleAttack(bullets *[]*Bullet) {
-	if p.takingDamage || !ebiten.IsKeyPressed(p.controls.Attack) {
-		return
+func (p *Player) handleAttack(bullets *[]*Bullet, arrows *[]*Arrow) {
+    if p.takingDamage {
+        return
+    }
+
+    if p.choice == "Pistol" && ebiten.IsKeyPressed(p.controls.Attack) {
+        p.handlePistolAttack(bullets)
+    }
+
+    if p.choice == "Sword" && inpututil.IsKeyJustPressed(p.controls.Attack) && !p.attacking {
+        p.startSwordAttack()
+    }
+
+    if p.choice == "Bow" {
+        p.handleBowAttack(arrows)
+    }
+}
+
+func (p *Player) handleBowAttack(arrows *[]*Arrow) {
+    if ebiten.IsKeyPressed(p.controls.Attack) && 
+		!p.attacking && !p.charging {
+			p.charging = true 
+			p.chargeTime = 0 
+			p.attacking = true 
+			p.attackPos = 0 
+			p.shootTimer.Start()
 	}
 
-	if p.choice == "Pistol" {
-		p.handlePistol(bullets)
-	}
+	if p.charging {
+		p.chargeTime++ 
 
-	if p.choice == "Sword" && inpututil.IsKeyJustPressed(p.controls.Attack) && !p.attacking {
-		p.startSwordAttack()
+		if p.shootTimer.IsReady() {
+			p.attackPos++ 
+			if p.attackPos >= len(p.attackSprites)-2 {
+				p.attackPos = len(p.attackSprites) - 2
+			}
+			p.shootTimer.Reset()
+		}
+
+		if inpututil.IsKeyJustReleased(p.controls.Attack) {
+            bx := p.X
+            if p.facingRight {
+                bx += p.Width
+            } else {
+                bx -= p.Width * 0.5
+            }
+
+            by := p.Y + p.Height*0.4
+
+            charged := p.chargeTime > 40
+            *arrows = append(*arrows, NewArrow(bx, by, p.facingRight, charged))
+
+            p.charging = false
+            p.chargeTime = 0
+            p.attacking = false
+            p.attackPos = 0
+            p.shootTimer.Stop()
+        }
 	}
 }
 
-func (p *Player) handlePistol(bullets *[]*Bullet) {
+func (p *Player) handlePistolAttack(bullets *[]*Bullet) {
 	if !p.shootTimer.IsActive() {
 		p.shootTimer.Start()
 	}
@@ -288,7 +430,6 @@ func (p *Player) handleMovementInput() {
 	}
 }
 
-
 func (p *Player) moveHorizontal(right bool) {
 	if right {
 		p.VelX = VelX
@@ -354,6 +495,8 @@ func (p *Player) clampWorld() {
 
 func (p *Player) selectSprite() {
 	switch {
+	case p.isDead:
+		p.sprite = p.deathSprites[p.deathPos]
 	case p.dashing:
 		// dash sprite already set
 	case p.takingDamage:
@@ -367,16 +510,38 @@ func (p *Player) selectSprite() {
 	}
 }
 
+func (p *Player) Update(platforms []Platform, bullets *[]*Bullet, bombs *[]*Bomb, arrows *[]*Arrow) {
+	if p.isDead {
+        if !p.deathTimer.IsActive() {
+            p.deathTimer.Start()
+        }
+        if p.deathTimer.IsReady() {
+            p.deathPos++
+            if p.deathPos >= len(p.deathSprites) {
+                p.deathPos = len(p.deathSprites) - 1
+            } else {
+                p.deathTimer.Reset()
+            }
+        }
+        p.selectSprite()
+        return
+    }
 
-func (p *Player) Update(platforms []Platform, bullets *[]*Bullet, bombs *[]*Bomb) {
 	p.updateCooldowns()
 
 	if p.handleDash() {
 		return
 	}
 
+	if p.handlePushback() {
+        p.applyPhysics(platforms)
+        p.clampWorld()
+        p.selectSprite()
+        return
+    }
+
 	p.handleSpecial(bombs)
-	p.handleAttack(bullets)
+	p.handleAttack(bullets, arrows)
 	p.handleDamageAnimation()
 	p.handleAttackAnimation()
 	p.handleMovementInput()
@@ -394,13 +559,25 @@ func (p *Player) Draw(screen *ebiten.Image, playerOne bool) {
 	opts.GeoM.Translate(-w/2, 0)
 
 	if !p.facingRight {
-		opts.GeoM.Scale(-PlayerScale, PlayerScale)
+		if p.choice == "Bow" {
+			opts.GeoM.Scale(-1, 1)
+		} else {
+			opts.GeoM.Scale(-PlayerScale, PlayerScale)
+		}
 	} else {
-		opts.GeoM.Scale(PlayerScale, PlayerScale)
+		if p.choice == "Bow" {
+			opts.GeoM.Scale(1, 1)
+		} else {
+			opts.GeoM.Scale(PlayerScale, PlayerScale)
+		}
 	}
 
-	opts.GeoM.Translate(p.X, p.Y)
+	yOffset := 0.0
+    if p.choice == "Bow" {
+        yOffset = -30.0
+    }
 
+    opts.GeoM.Translate(p.X, p.Y+yOffset)
 	if playerOne {
 		opts.ColorScale.Scale(0.4, 0.4, 1.0, 1.0)
 	} else {
